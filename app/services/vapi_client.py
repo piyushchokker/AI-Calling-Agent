@@ -25,25 +25,33 @@ class VapiClient:
                 return getattr(obj, key, None)
 
             payload = {
-                "assistantId": settings.vapi_assistant_id,
-                "phoneNumberId": settings.vapi_phone_number_id,
-                "customer": {
-                    "name": safe_get(customer, "name"),
-                    "phone": safe_get(customer, "phone"),
-                },
-                "metadata": {
-                    "customer_id": safe_get(customer, "id"),
-                    "company_id": safe_get(company, "id"),
-                },
+            "assistantId": settings.vapi_assistant_id,
+            "phoneNumberId": settings.vapi_phone_number_id,
+            "customer": {
+                "name": safe_get(customer, "name"),
+                "number": safe_get(customer, "phone"), 
+            },
+            "metadata": {
+                "customer_id": safe_get(customer, "id"),
+                "company_id": safe_get(company, "id"),
+            },
+            # 👇 Move variableValues inside assistantOverrides 👇
+            "assistantOverrides": {
                 "variableValues": {
                     "customer_name": safe_get(customer, "name"),
                     "company_name": safe_get(company, "name"),
                     "company_prompt": safe_get(company, "prompt_instructions"),
                     "dynamic_prompt": dynamic_prompt,
-                },
+                }
             }
+        }
             async with await self.create_client() as client:
                 response = await client.post("/call", json=payload)
+
+                if response.status_code >= 400:
+                    print(f"\n🚨 VAPI ERROR DETAIL: {response.text}\n")
+
+
                 response.raise_for_status()
                 data = response.json()
                 return data.get("id") or data.get("call_id")

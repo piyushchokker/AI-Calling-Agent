@@ -75,8 +75,12 @@ def build_evaluation_graph() -> dict[str, str]:
 
 def build_evaluation_prompt(transcript: str) -> str:
     return (
-        "Analyze the lead qualification call transcript. Determine whether the customer is qualified, "
-        "not interested, the call failed, or human review is needed. Return structured JSON only.\n\n"
+        "Analyze the lead qualification call transcript. Determine whether the customer is 'QUALIFIED', "
+        "'NOT_INTERESTED', 'FAILED', or if human review is needed ('NEEDS_REVIEW').\n\n"
+        "You MUST return a JSON object with exactly these three keys:\n"
+        '- "status": exactly one of ["QUALIFIED", "NOT_INTERESTED", "FAILED", "NEEDS_REVIEW"]\n'
+        '- "reason": a short string explaining your decision\n'
+        '- "confidence": a float between 0.0 and 1.0 indicating how certain you are\n\n'
         f"Transcript:\n{transcript}"
     )
 
