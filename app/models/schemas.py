@@ -98,4 +98,4 @@ class TranscriptEvaluationResult(BaseModel):
 
 class WebhookAckResponse(BaseModel):
     received: bool = True
-    file_path: str
+    file_path: str | None = None

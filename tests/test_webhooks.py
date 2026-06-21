@@ -1,11 +1,8 @@
 import pytest
 
-
 @pytest.mark.asyncio
-async def test_webhook_saves_file_and_accepts_payload(client, monkeypatch, tmp_path):
+async def test_webhook_accepts_payload(client, monkeypatch):
     from app.routes import webhooks
-
-    monkeypatch.setattr(webhooks, "WEBHOOK_STORAGE_DIR", tmp_path)
 
     async def fake_run_evaluation_flow(repository, customer_id, transcript, summary, call_id, metadata):
         return {"status": "QUALIFIED"}
@@ -23,4 +20,3 @@ async def test_webhook_saves_file_and_accepts_payload(client, monkeypatch, tmp_p
     response = client.post("/api/v1/webhooks/vapi", json=payload)
     assert response.status_code == 200
     assert response.json()["received"] is True
-    assert list(tmp_path.glob("*.json"))
