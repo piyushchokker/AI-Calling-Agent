@@ -10,8 +10,10 @@ class DispatchGraphState(TypedDict, total=False):
 
 class EvaluationGraphState(TypedDict, total=False):
     customer_id: str
+    call_id:str
     transcript: str
     summary: str
     outcome: str
+    metadata:str
     confidence: float
     status: str

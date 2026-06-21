@@ -15,19 +15,24 @@ router = APIRouter()
 
 
 def _extract_event_fields(payload: dict[str, Any]) -> tuple[str, str | None, str | None, str | None]:
-    # Vapi nests data differently depending on the event type (end-of-call-report, status-update, etc.)
+    # Base message and call objects
     message = payload.get("message", {})
     call = message.get("call", {}) or payload.get("call", {})
     
-    # Dig for metadata in all possible Vapi locations
+    # Vapi nests summary and transcript in these specific objects
+    artifact = message.get("artifact", {})
+    analysis = message.get("analysis", {})
+    
+    # Dig for metadata
     metadata = payload.get("metadata") or message.get("metadata") or call.get("metadata") or {}
 
+    # Extract fields using aggressive fallback logic
     call_id = payload.get("call_id") or payload.get("callId") or call.get("id")
-    transcript = payload.get("transcript") or message.get("transcript")
-    summary = payload.get("summary") or message.get("summary")
-    
-    # Extract the customer_id from whichever location had the metadata
     customer_id = payload.get("customer_id") or payload.get("customerId") or metadata.get("customer_id")
+    
+    # Check the top level (Postman), then message, then artifact/analysis (Real Vapi)
+    transcript = payload.get("transcript") or message.get("transcript") or artifact.get("transcript")
+    summary = payload.get("summary") or message.get("summary") or analysis.get("summary")
 
     return call_id, transcript, summary, customer_id
 

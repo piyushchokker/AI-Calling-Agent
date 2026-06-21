@@ -7,8 +7,23 @@ from openai import AsyncOpenAI
 from app.config import settings
 from app.graphs.state import EvaluationGraphState
 
-
 def create_evaluation_graph(repository):
+    
+    # 1. EVALUATE TRANSCRIPT FIRST
+    async def evaluate_call(state: EvaluationGraphState) -> dict[str, Any]:
+        result = await evaluate_transcript(state.get("transcript", ""))
+        return {"status": result["status"], "confidence": result["confidence"], "reason": result["reason"]}
+
+    # 2. CHECK CONFIDENCE RULE
+    async def determine_status(state: EvaluationGraphState) -> dict[str, Any]:
+        result = apply_low_confidence_rule({
+            "status": state.get("status", "NEEDS_REVIEW"),
+            "confidence": state.get("confidence", 0.0),
+            "reason": state.get("reason", "")
+        })
+        return {"status": result["status"], "confidence": result["confidence"], "reason": result.get("reason", "")}
+
+    # 3. STORE IN DATABASE NOW THAT WE HAVE THE ACTUAL STATUS
     async def store_transcript(state: EvaluationGraphState) -> dict[str, Any]:
         await repository.create_call_log(
             {
@@ -16,40 +31,30 @@ def create_evaluation_graph(repository):
                 "call_id": state.get("call_id"),
                 "transcript": state.get("transcript", ""),
                 "summary": state.get("summary", ""),
-                "outcome": state.get("status", "NEEDS_REVIEW"),
-                "metadata": state.get("metadata", {}),
+                "outcome": state.get("status", "NEEDS_REVIEW"), # Will now use OpenAI's decision!
+                "metadata": state.get("metadata", {})
             }
         )
-        return {"status": state.get("status", "NEEDS_REVIEW")}
+        return {}
 
-    async def evaluate_call(state: EvaluationGraphState) -> dict[str, Any]:
-        result = await evaluate_transcript(state.get("transcript", ""))
-        return {"status": result["status"], "confidence": result["confidence"], "reason": result["reason"]}
-
-    async def determine_status(state: EvaluationGraphState) -> dict[str, Any]:
-        result = apply_low_confidence_rule(
-            {
-                "status": state.get("status", "NEEDS_REVIEW"),
-                "confidence": state.get("confidence", 0.0),
-                "reason": state.get("reason", ""),
-            }
-        )
-        return {"status": result["status"], "confidence": result["confidence"], "reason": result.get("reason", "")}
-
+    # 4. UPDATE THE CUSTOMER TABLE
     async def update_customer(state: EvaluationGraphState) -> dict[str, Any]:
         await repository.update_customer_status(state["customer_id"], state["status"])
         return summarize_evaluation(state)
 
     graph = StateGraph(EvaluationGraphState)
-    graph.add_node("store_transcript", store_transcript)
     graph.add_node("evaluate_transcript", evaluate_call)
     graph.add_node("determine_status", determine_status)
+    graph.add_node("store_transcript", store_transcript)
     graph.add_node("update_customer", update_customer)
-    graph.add_edge(START, "store_transcript")
-    graph.add_edge("store_transcript", "evaluate_transcript")
+    
+    # Notice the new logical ordering of the edges
+    graph.add_edge(START, "evaluate_transcript")
     graph.add_edge("evaluate_transcript", "determine_status")
-    graph.add_edge("determine_status", "update_customer")
+    graph.add_edge("determine_status", "store_transcript")
+    graph.add_edge("store_transcript", "update_customer")
     graph.add_edge("update_customer", END)
+    
     return graph.compile()
 
 
@@ -70,7 +75,7 @@ async def run_evaluation_flow(repository, customer_id: str, transcript: str, sum
 
 
 def build_evaluation_graph() -> dict[str, str]:
-    return {"name": "evaluation", "entry": "store_transcript"}
+    return {"name": "evaluation", "entry": "evaluate_transcript"}
 
 
 def build_evaluation_prompt(transcript: str) -> str:
@@ -109,6 +114,7 @@ async def evaluate_transcript(transcript: str) -> dict[str, Any]:
 
     content = response.choices[0].message.content or "{}"
     parsed = json.loads(content)
+
     result = {
         "status": parsed.get("status", "NEEDS_REVIEW"),
         "reason": parsed.get("reason", ""),
