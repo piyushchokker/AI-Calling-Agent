@@ -17,29 +17,36 @@ class VapiClient:
         return httpx.AsyncClient(base_url=self.base_url, headers=headers, timeout=30.0)
 
     async def create_outbound_call(self, customer: Any, company: Any, dynamic_prompt: str) -> str:
-        payload = {
-            "assistantId": settings.vapi_assistant_id,
-            "phoneNumberId": settings.vapi_phone_number_id,
-            "customer": {
-                "name": getattr(customer, "name", None),
-                "phone": getattr(customer, "phone", None),
-            },
-            "metadata": {
-                "customer_id": getattr(customer, "id", None),
-                "company_id": getattr(company, "id", None),
-            },
-            "variableValues": {
-                "customer_name": getattr(customer, "name", None),
-                "company_name": getattr(company, "name", None),
-                "company_prompt": getattr(company, "prompt_instructions", None),
-                "dynamic_prompt": dynamic_prompt,
-            },
-        }
-        async with await self.create_client() as client:
-            response = await client.post("/call", json=payload)
-            response.raise_for_status()
-            data = response.json()
-            return data.get("id") or data.get("call_id")
+            
+            # Helper to safely get from either a dict or an object (just in case!)
+            def safe_get(obj, key):
+                if isinstance(obj, dict):
+                    return obj.get(key)
+                return getattr(obj, key, None)
+
+            payload = {
+                "assistantId": settings.vapi_assistant_id,
+                "phoneNumberId": settings.vapi_phone_number_id,
+                "customer": {
+                    "name": safe_get(customer, "name"),
+                    "phone": safe_get(customer, "phone"),
+                },
+                "metadata": {
+                    "customer_id": safe_get(customer, "id"),
+                    "company_id": safe_get(company, "id"),
+                },
+                "variableValues": {
+                    "customer_name": safe_get(customer, "name"),
+                    "company_name": safe_get(company, "name"),
+                    "company_prompt": safe_get(company, "prompt_instructions"),
+                    "dynamic_prompt": dynamic_prompt,
+                },
+            }
+            async with await self.create_client() as client:
+                response = await client.post("/call", json=payload)
+                response.raise_for_status()
+                data = response.json()
+                return data.get("id") or data.get("call_id")
 
     async def post_event(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         async with await self.create_client() as client:
