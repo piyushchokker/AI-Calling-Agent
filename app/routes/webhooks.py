@@ -37,34 +37,26 @@ def _extract_event_fields(payload: dict[str, Any]) -> tuple[str, str | None, str
     return call_id, transcript, summary, customer_id
 
 
-def _verify_webhook_signature(raw_body: bytes, signature: str | None) -> None:
+def _verify_webhook_signature(request: Request) -> None:
     if not settings.vapi_webhook_secret:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Webhook secret is not configured on the server")
-    if not signature:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing webhook signature")
-
-    import hmac
-    import hashlib
-
-    expected = hmac.new(settings.vapi_webhook_secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
-
-    if not hmac.compare_digest(expected, signature):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook signature")
+        
+    # Vapi's new dashboard requires passing the secret as a custom header.
+    # We will check the 'x-vapi-secret' header against our .env secret.
+    incoming_secret = request.headers.get("x-vapi-secret")
+    
+    if not incoming_secret:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing x-vapi-secret header")
+        
+    if incoming_secret != settings.vapi_webhook_secret:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook secret")
 
 
 # BYPASS ADDED HERE: Removed `_: None = Depends(require_tenant_auth)` so Vapi isn't blocked
 @router.post("/vapi", response_model=WebhookAckResponse, status_code=status.HTTP_200_OK)
 async def handle_vapi_webhook(request: Request, background_tasks: BackgroundTasks) -> WebhookAckResponse:
+    _verify_webhook_signature(request)
     raw_body = await request.body()
-    
-    # Support BOTH Vapi's official HMAC signature AND the Custom Bearer Token the user set up
-    auth_header = request.headers.get("authorization") or request.headers.get("x-vapi-secret")
-    vapi_sig = request.headers.get("x-vapi-signature") or request.headers.get("x-webhook-signature")
-    
-    if auth_header and settings.vapi_webhook_secret and auth_header.strip().lower() == f"bearer {settings.vapi_webhook_secret}".lower():
-        pass  # Authentication successful via Bearer Token
-    else:
-        _verify_webhook_signature(raw_body, vapi_sig) # Fallback to HMAC Signature verification
 
     payload: dict[str, Any]
 
