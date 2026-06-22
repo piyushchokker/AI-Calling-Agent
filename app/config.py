@@ -13,7 +13,14 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     port: int = Field(default=8000, alias="PORT")
     api_v1_prefix: str = "/api/v1"
-    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:8000"]
+    frontend_url: str | None = Field(default=None, alias="FRONTEND_URL")
+    
+    @property
+    def cors_origins(self) -> List[str]:
+        origins = ["http://localhost:3000", "http://localhost:8000"]
+        if self.frontend_url:
+            origins.append(self.frontend_url.rstrip("/"))
+        return origins
     database_url: str = Field(default="sqlite:///./callagent.db", alias="DATABASE_URL")
     supabase_url: str | None = Field(default=None, alias="SUPABASE_URL")
     supabase_key: str | None = Field(default=None, alias="SUPABASE_KEY")
