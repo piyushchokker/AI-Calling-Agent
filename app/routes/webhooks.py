@@ -47,6 +47,7 @@ def _verify_webhook_signature(raw_body: bytes, signature: str | None) -> None:
     import hashlib
 
     expected = hmac.new(settings.vapi_webhook_secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+
     if not hmac.compare_digest(expected, signature):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook signature")
 
@@ -55,7 +56,15 @@ def _verify_webhook_signature(raw_body: bytes, signature: str | None) -> None:
 @router.post("/vapi", response_model=WebhookAckResponse, status_code=status.HTTP_200_OK)
 async def handle_vapi_webhook(request: Request, background_tasks: BackgroundTasks) -> WebhookAckResponse:
     raw_body = await request.body()
-    _verify_webhook_signature(raw_body, request.headers.get("x-vapi-signature") or request.headers.get("x-webhook-signature"))
+    
+    # Support BOTH Vapi's official HMAC signature AND the Custom Bearer Token the user set up
+    auth_header = request.headers.get("authorization")
+    vapi_sig = request.headers.get("x-vapi-signature") or request.headers.get("x-webhook-signature")
+    
+    if auth_header and settings.vapi_webhook_secret and auth_header.strip().lower() == f"bearer {settings.vapi_webhook_secret}".lower():
+        pass  # Authentication successful via Bearer Token
+    else:
+        _verify_webhook_signature(raw_body, vapi_sig) # Fallback to HMAC Signature verification
 
     payload: dict[str, Any]
 
