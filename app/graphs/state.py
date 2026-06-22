@@ -17,3 +17,4 @@ class EvaluationGraphState(TypedDict, total=False):
     metadata:str
     confidence: float
     status: str
+    ended_reason: str

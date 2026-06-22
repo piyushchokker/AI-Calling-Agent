@@ -14,7 +14,7 @@ from app.graphs.evaluation_graph import run_evaluation_flow
 router = APIRouter()
 
 
-def _extract_event_fields(payload: dict[str, Any]) -> tuple[str, str | None, str | None, str | None]:
+def _extract_event_fields(payload: dict[str, Any]) -> tuple[str | None, str | None, str | None, str | None, str | None]:
     # Base message and call objects
     message = payload.get("message", {})
     call = message.get("call", {}) or payload.get("call", {})
@@ -33,8 +33,9 @@ def _extract_event_fields(payload: dict[str, Any]) -> tuple[str, str | None, str
     # Check the top level (Postman), then message, then artifact/analysis (Real Vapi)
     transcript = payload.get("transcript") or message.get("transcript") or artifact.get("transcript")
     summary = payload.get("summary") or message.get("summary") or analysis.get("summary")
+    ended_reason = message.get("endedReason") or call.get("endedReason")
 
-    return call_id, transcript, summary, customer_id
+    return call_id, transcript, summary, customer_id, ended_reason
 
 
 def _verify_webhook_signature(request: Request) -> None:
@@ -67,17 +68,17 @@ async def handle_vapi_webhook(request: Request, background_tasks: BackgroundTask
         payload = {"raw_body": raw_body.decode("utf-8", errors="replace")}
 
     event_type = payload.get("event_type") or payload.get("type") or payload.get("event") or "vapi.webhook"
-    call_id, transcript, summary, customer_id = _extract_event_fields(payload)
+    call_id, transcript, summary, customer_id, ended_reason = _extract_event_fields(payload)
 
 
     if not customer_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="customer_id missing from webhook payload")
 
-    background_tasks.add_task(_process_webhook, customer_id, call_id, transcript or "", summary or "", payload)
+    background_tasks.add_task(_process_webhook, customer_id, call_id, transcript or "", summary or "", payload, ended_reason)
 
     return WebhookAckResponse(received=True)
 
 
-async def _process_webhook(customer_id: str, call_id: str | None, transcript: str, summary: str, payload: dict[str, Any]) -> None:
+async def _process_webhook(customer_id: str, call_id: str | None, transcript: str, summary: str, payload: dict[str, Any], ended_reason: str | None) -> None:
     repository = Repository()
-    await run_evaluation_flow(repository, customer_id, transcript, summary, call_id, payload)
+    await run_evaluation_flow(repository, customer_id, transcript, summary, call_id, payload, ended_reason)

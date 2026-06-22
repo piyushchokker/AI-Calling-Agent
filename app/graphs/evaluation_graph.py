@@ -13,6 +13,13 @@ def create_evaluation_graph(repository):
     
     # 1. EVALUATE TRANSCRIPT FIRST
     async def evaluate_call(state: EvaluationGraphState) -> dict[str, Any]:
+        ended_reason = state.get("ended_reason")
+        unanswered_reasons = ["customer-did-not-answer", "voicemail", "customer-busy", "no-user-response", "customer-did-not-give-microphone-permission"]
+        
+        if ended_reason and ended_reason in unanswered_reasons:
+            # FAST PATH: Skip OpenAI completely for unanswered calls to save money and prevent hallucination
+            return {"status": "FAILED", "confidence": 1.0, "reason": f"Call did not connect ({ended_reason})"}
+            
         result = await evaluate_transcript(state.get("transcript", ""))
         return {"status": result["status"], "confidence": result["confidence"], "reason": result["reason"]}
 
@@ -60,7 +67,7 @@ def create_evaluation_graph(repository):
     return graph.compile()
 
 
-async def run_evaluation_flow(repository, customer_id: str, transcript: str, summary: str, call_id: str | None, metadata: dict[str, Any]) -> dict[str, Any]:
+async def run_evaluation_flow(repository, customer_id: str, transcript: str, summary: str, call_id: str | None, metadata: dict[str, Any], ended_reason: str | None = None) -> dict[str, Any]:
     graph = create_evaluation_graph(repository)
     return await graph.ainvoke(
         {
@@ -72,6 +79,7 @@ async def run_evaluation_flow(repository, customer_id: str, transcript: str, sum
             "status": "NEEDS_REVIEW",
             "call_id": call_id,
             "metadata": metadata,
+            "ended_reason": ended_reason,
         }
     )
 
