@@ -58,7 +58,7 @@ async def handle_vapi_webhook(request: Request, background_tasks: BackgroundTask
     raw_body = await request.body()
     
     # Support BOTH Vapi's official HMAC signature AND the Custom Bearer Token the user set up
-    auth_header = request.headers.get("authorization")
+    auth_header = request.headers.get("authorization") or request.headers.get("x-vapi-secret")
     vapi_sig = request.headers.get("x-vapi-signature") or request.headers.get("x-webhook-signature")
     
     if auth_header and settings.vapi_webhook_secret and auth_header.strip().lower() == f"bearer {settings.vapi_webhook_secret}".lower():
