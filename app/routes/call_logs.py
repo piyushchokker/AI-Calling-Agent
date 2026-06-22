@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.dependencies import require_tenant_auth
+from app.dependencies import require_user_auth
 from app.models.schemas import CallLogRead
 from app.services.repository import Repository
 
@@ -8,8 +8,8 @@ router = APIRouter()
 
 
 @router.get("/{customer_id}", response_model=list[CallLogRead])
-async def get_call_logs(customer_id: str, _: None = Depends(require_tenant_auth)) -> list[CallLogRead]:
-    repository = Repository()
+async def get_call_logs(customer_id: str, token: str = Depends(require_user_auth)) -> list[CallLogRead]:
+    repository = Repository(token=token)
     customer = await repository.get_customer(customer_id)
     if not customer:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")

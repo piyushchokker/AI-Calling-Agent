@@ -47,16 +47,23 @@ class RepositoryUpstreamError(RepositoryError):
 
 
 class SupabaseRepository:
-    def __init__(self) -> None:
-        supabase_key = settings.supabase_service_role_key or settings.supabase_key
-        if not settings.supabase_url or not supabase_key:
-            raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set")
-        if settings.environment != "development" and not settings.supabase_service_role_key:
-            raise RuntimeError("Production requires SUPABASE_SERVICE_ROLE_KEY")
+    def __init__(self, token: str | None = None) -> None:
+        if token:
+            # When a token is provided, use the anon key so RLS works based on the token
+            api_key = settings.supabase_key
+            auth_token = token
+        else:
+            # Otherwise use the service role key (bypasses RLS)
+            api_key = settings.supabase_service_role_key or settings.supabase_key
+            auth_token = api_key
+
+        if not settings.supabase_url or not api_key:
+            raise RuntimeError("SUPABASE_URL and SUPABASE_KEY/SERVICE_ROLE_KEY must be set")
+        
         self.base_url = settings.supabase_url.rstrip("/")
         self.headers = {
-            "apikey": supabase_key,
-            "Authorization": f"Bearer {supabase_key}",
+            "apikey": api_key,
+            "Authorization": f"Bearer {auth_token}",
             "Content-Type": "application/json",
             "Prefer": "return=representation",
         }
@@ -98,8 +105,8 @@ class SupabaseRepository:
 
 
 class Repository:
-    def __init__(self) -> None:
-        self.supabase = SupabaseRepository()
+    def __init__(self, token: str | None = None) -> None:
+        self.supabase = SupabaseRepository(token=token)
 
     async def create_company(self, payload: dict[str, Any]) -> Company:
         return await self.supabase.insert("companies", payload)

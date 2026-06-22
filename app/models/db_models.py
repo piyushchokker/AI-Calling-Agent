@@ -19,6 +19,7 @@ class Company(Base):
     __tablename__ = "companies"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_pk)
+    owner_id: Mapped[str] = mapped_column(String(36), nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
     prompt_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
     assistant_id: Mapped[str | None] = mapped_column(String, nullable=True)
