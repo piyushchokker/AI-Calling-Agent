@@ -1,0 +1,34 @@
+steps:
+  # 1. Build the Docker container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: 
+      - 'build'
+      - '-t'
+      - 'asia-south1-docker.pkg.dev/ai-calling-agent-piyushchokker/callagent-repo/callagent-backend:$COMMIT_SHA'
+      - '.'
+    
+  # 2. Push the container image to Google Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: 
+      - 'push'
+      - 'asia-south1-docker.pkg.dev/ai-calling-agent-piyushchokker/callagent-repo/callagent-backend:$COMMIT_SHA'
+    
+  # 3. Deploy container image to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'callagent-backend'
+      - '--image'
+      - 'asia-south1-docker.pkg.dev/ai-calling-agent-piyushchokker/callagent-repo/callagent-backend:$COMMIT_SHA'
+      - '--region'
+      - 'asia-south1'
+      - '--allow-unauthenticated'
+
+# Specify the images to be pushed
+images:
+  - 'asia-south1-docker.pkg.dev/ai-calling-agent-piyushchokker/callagent-repo/callagent-backend:$COMMIT_SHA'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
