@@ -45,7 +45,8 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     def _startup() -> None:
-        init_db()
+        # init_db()  # Commented out because the SQLite db fails to create on read-only production filesystems
+        pass
 
     @app.exception_handler(Exception)
     async def generic_exception_handler(_: Request, exc: Exception):
